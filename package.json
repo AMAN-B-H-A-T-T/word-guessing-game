@@ -1,0 +1,43 @@
+{
+  "name": "draw.pandas-backend",
+  "version": "1.0.0",
+  "main": "./dist/server.js",
+  "description": "multi-player word guessing game.",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:dev": "tsc -w",
+    "start:dev": "nodemon ./dis/server.js",
+    "build": "tsc",
+    "start": "node ./dis/server.js"
+  },
+  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": "http://localhost"
+  },
+  "license": "ISC",
+  "author": "Aman Bhatt <amansevak123@gmail.com>",
+  "engines": {
+    "node": ">=18.2.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.18.0",
+    "cls-rtracer": "^2.6.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "joi": "^18.0.1",
+    "prisma": "^6.18.0",
+    "redis": "^5.9.0",
+    "winston": "^3.18.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/joi": "^17.2.2",
+    "@types/node": "^24.9.1",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

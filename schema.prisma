@@ -1,0 +1,51 @@
+datasource db {
+    provider = "postgresql"
+    url      = env("POSTGRES_CONNECTION_URL")
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+model Users {
+    id          String @id @db.VarChar(40)
+    displayName String @map("display_name") @db.VarChar(100)
+    userEmail   String @map("user_email") @db.VarChar(100)
+    password    String @db.VarChar(100)
+    avatarUrl   String @map("avatar_url") @db.VarChar(255)
+    created     BigInt
+    modified    BigInt
+
+    @@map("tbl_users")
+}
+
+model Games {
+    id            String             @id @db.VarChar(40)
+    rounds        Int
+    allowedPlayer Int                @map("allowed_player")
+    gameCode      String             @map("game_code") @db.VarChar(20)
+    difficulty    GameDifficultyType @default(EASY)
+    minWordLength Int                @map("min_word_lenght")
+    created       BigInt
+    modified      BigInt
+
+    @@map("tbl_game")
+}
+
+model Players {
+    id          String @id @db.VarChar(40)
+    userId      String @map("user_id") @db.VarChar(40)
+    game_Id     String @map("game_id") @db.VarChar(40)
+    gameCreator Int    @map("is_game_creator")
+    score       Int
+    created     BigInt
+    modified    BigInt
+
+    @@map("tbl_player")
+}
+
+enum GameDifficultyType {
+    EASY   @map("EASY ")
+    MEDIUM @map("MEDIUM ")
+    HARD   @map("HARD")
+}
