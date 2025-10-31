@@ -2,6 +2,7 @@ export const ROOT = "/";
 export const ID = "/:id";
 export const CREATE = "/create";
 export const LIST = "/list";
+export const LOGIN = "/login";
 
 // MODUEL ROUTES
 export const PROFILE_ROUTES = "/profile";

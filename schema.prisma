@@ -11,7 +11,7 @@ model Users {
     id          String @id @db.VarChar(40)
     displayName String @map("display_name") @db.VarChar(100)
     userEmail   String @map("user_email") @db.VarChar(100)
-    password    String @db.VarChar(100)
+    password    String
     avatarUrl   String @map("avatar_url") @db.VarChar(255)
     created     BigInt
     modified    BigInt

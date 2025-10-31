@@ -20,3 +20,9 @@ export const STATUS_CODES = {
 // module constants
 export const PROFILE = "profile";
 export const GAME = "game";
+
+// BCRYPT constants
+export const SALT_ROUNDES = 10;
+
+// JWT expire time
+export const EXPIRE_TIME = "30d";

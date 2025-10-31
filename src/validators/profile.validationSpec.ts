@@ -1,4 +1,4 @@
-import { CREATE } from "../constants/endpoint.constants";
+import { CREATE, LOGIN } from "../constants/endpoint.constants";
 import { IValidationSpec } from "./validationSpecs.types";
 
 class ProfileValidationSpec {
@@ -7,6 +7,9 @@ class ProfileValidationSpec {
     this.validationSpec = {
       [CREATE]: {
         body: "validateCreateProfileRequestBody",
+      },
+      [LOGIN]: {
+        body: "validateLoginRequestBody",
       },
     };
   }

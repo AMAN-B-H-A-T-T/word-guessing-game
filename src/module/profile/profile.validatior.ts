@@ -13,7 +13,7 @@ class ProfileValidators {
       .pattern(/^[A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]*$/)
       .required()
       .messages({
-        "any.required": "Invalid password. password must not be balnk.",
+        "any.required": "Invalid password. password must not be blank.",
         "string.pattern.base":
           "Invalid password. Passwod must contains a-z, A-Z and 0-9",
       });
@@ -32,6 +32,20 @@ class ProfileValidators {
     });
 
     return profileBody;
+  }
+
+  static validateLoginRequestBody(): ObjectSchema {
+    const password = Joi.string().empty("").required().messages({
+      "any.required": "Invalid password. Password must be required.",
+      "string.empty": "Invalid password. Password must not be blank.",
+    });
+
+    const loginBody: ObjectSchema = Joi.object({
+      email: validationConsts.VALIDATE_EMAIL,
+      password,
+    });
+
+    return loginBody;
   }
 }
 

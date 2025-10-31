@@ -1,8 +1,13 @@
 import { NextFunction, Request, Response } from "express";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import {
   CHAR_SET,
+  EXPIRE_TIME,
   PROFILE,
   RANDOM_ID_STRING_LENGTH,
+  SALT_ROUNDES,
+  STATUS_CODES,
 } from "../constants/index.constants";
 import {
   FieldTypes,
@@ -12,7 +17,9 @@ import {
 import LatestSpec from "../validators/latestSpec";
 import logger from "../configurations/logger.configurations";
 import ProfileValidators from "../module/profile/profile.validatior";
-
+import HttpException from "../exceptions/httpException";
+import { JWT_KEY } from "../configurations/env.configurations";
+const { INTERNAL_SERVER_ERROR } = STATUS_CODES;
 class CommonUtilities {
   static generateRandomID(
     prefix?: string,
@@ -187,7 +194,6 @@ class CommonUtilities {
           path,
           apiNameMap
         );
-
         apiRequestSpecs = latestSpec.getModule(moduleName).validationSpec;
 
         apiRequestSpecs = apiRequestSpecs[apiName];
@@ -226,7 +232,7 @@ class CommonUtilities {
         const fun: any = schemas[part];
         const objectSchema = (validator as any)[fun]?.();
         const { error } = objectSchema.validate(req[part], {
-          abortEarly: false, // show all errors, not just the first one
+          abortEarly: true, // show all errors, not just the first one
           allowUnknown: part === "headers", // allow unknown headers
         });
         if (error) {
@@ -241,6 +247,53 @@ class CommonUtilities {
     }
 
     return errors;
+  }
+
+  static sendErrorResponse(response: Response, error: Error) {
+    let message = null,
+      httpCode = INTERNAL_SERVER_ERROR,
+      type = "internal_server_error";
+
+    if (error instanceof HttpException) {
+      message = error.message;
+      httpCode = error.statusCode;
+      type = error.type;
+    } else {
+      message = error.message;
+    }
+
+    this.sendResponse(response, {
+      httpCode,
+      data: {
+        errors: [
+          {
+            type,
+            message,
+          },
+        ],
+      },
+    });
+  }
+
+  static generateEncryptedPassword(password: any): Promise<string> {
+    return bcrypt.hash(password, SALT_ROUNDES);
+  }
+
+  static decryptAndComparePassword(
+    hashedPassword: string,
+    plainPassword: string
+  ) {
+    return bcrypt.compare(plainPassword, hashedPassword);
+  }
+
+  static generateAuthToken(data: Record<string, any>) {
+    const token = jwt.sign(data, JWT_KEY, { expiresIn: EXPIRE_TIME });
+    return token;
+  }
+
+  static verifyToken(token: string) {
+    const profile = jwt.verify(token, JWT_KEY);
+    return profile;
   }
 }
 
