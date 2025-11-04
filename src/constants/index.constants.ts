@@ -1,3 +1,5 @@
+import { GameDifficultyType } from "@prisma/client";
+
 export const RANDOM_ID_STRING_LENGTH = 8;
 export const CHAR_SET =
   "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -20,9 +22,18 @@ export const STATUS_CODES = {
 // module constants
 export const PROFILE = "profile";
 export const GAME = "game";
+export const DIFFICULTY_LEVELS = Object.keys(GameDifficultyType).map(
+  (difficulty) => difficulty
+);
 
 // BCRYPT constants
 export const SALT_ROUNDES = 10;
 
 // JWT expire time
 export const EXPIRE_TIME = "30d";
+
+//API constants
+export enum API_MODE {
+  INTERNAL = "INTERNAL",
+  EXTERNAL = "EXTERNAL",
+}

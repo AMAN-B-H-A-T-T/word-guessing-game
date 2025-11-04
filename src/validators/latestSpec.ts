@@ -1,3 +1,4 @@
+import GameValidationSpecs from "./game.validationSpecs";
 import ProfileValidationSpec from "./profile.validationSpec";
 
 class LatestSpec {
@@ -5,6 +6,7 @@ class LatestSpec {
   constructor() {
     this.latest = {
       profile: new ProfileValidationSpec(),
+      game: new GameValidationSpecs(),
     };
   }
 

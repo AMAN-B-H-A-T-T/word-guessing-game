@@ -63,6 +63,7 @@ class ProfileUtilities {
     }
 
     const tokenPaylaod = {
+      id: createdProfile.id,
       email: createdProfile.userEmail,
       displayName: createdProfile.displayName,
       avatarUrl: createdProfile.avatarUrl,

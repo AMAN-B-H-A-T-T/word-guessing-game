@@ -22,10 +22,13 @@ model Users {
 model Games {
     id            String             @id @db.VarChar(40)
     rounds        Int
-    allowedPlayer Int                @map("allowed_player")
+    maxPlayers    Int                @map("max_players")
     gameCode      String             @map("game_code") @db.VarChar(20)
     difficulty    GameDifficultyType @default(EASY)
-    minWordLength Int                @map("min_word_lenght")
+    minWordLength Int                @map("min_word_length")
+    drawTime      Int                @map("draw_time")
+    wordCount     Int                @map("word_count")
+    status        GameStatus         @default(INIT)
     created       BigInt
     modified      BigInt
 
@@ -33,19 +36,30 @@ model Games {
 }
 
 model Players {
-    id          String @id @db.VarChar(40)
-    userId      String @map("user_id") @db.VarChar(40)
-    game_Id     String @map("game_id") @db.VarChar(40)
-    gameCreator Int    @map("is_game_creator")
-    score       Int
-    created     BigInt
-    modified    BigInt
+    id            String @id @db.VarChar(40)
+    userId        String @map("user_id") @db.VarChar(40)
+    gameId       String @map("game_id") @db.VarChar(40)
+    isGameCreator Int    @map("is_game_creator")
+    status        Int    @default(1)
+    score         Int    @default(0)
+    created       BigInt
+    modified      BigInt
 
     @@map("tbl_player")
 }
 
 enum GameDifficultyType {
-    EASY   @map("EASY ")
-    MEDIUM @map("MEDIUM ")
+    EASY   @map("EASY")
+    MEDIUM @map("MEDIUM")
     HARD   @map("HARD")
+
+    @@map("difficulty_level")
+}
+
+enum GameStatus {
+    INIT    @map("INIT")
+    ONGOING @map("ONGOING")
+    ENDED   @map("ENDED")
+
+    @@map("gamestatustype")
 }

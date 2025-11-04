@@ -9,7 +9,7 @@ class ProfileController {
     try {
       const { body } = request;
       const newBody = await ProfileUtilities.createProfile(body);
-      CommonUtilities.sendResponse(response, {
+      return CommonUtilities.sendResponse(response, {
         httpCode: CREATED,
         data: newBody,
       });
@@ -24,7 +24,7 @@ class ProfileController {
       const { body } = request;
       const newBody = await ProfileUtilities.login(body);
 
-      CommonUtilities.sendResponse(response, {
+      return CommonUtilities.sendResponse(response, {
         httpCode: OK,
         data: newBody,
       });

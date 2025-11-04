@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, PrismaPromise, Users } from "@prisma/client";
 import database from "../../database";
 
 class ProfileService {
@@ -19,7 +19,7 @@ class ProfileService {
     return userModel.create(query);
   }
 
-  fetchProfile({ whereObject, selectObject }: any) {
+  fetchProfile({ whereObject, selectObject }: any): PrismaPromise<Users> {
     const { users: userModel } = database["prismaDrawPandasDB"];
 
     const query: Prisma.UsersFindFirstArgs = {};

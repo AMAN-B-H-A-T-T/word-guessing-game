@@ -11,7 +11,7 @@ const startApp = async () => {
   await database["prismaDrawPandasDB"].$connect();
 
   // create redis connection
-  // await createRedisClient();
+  await createRedisClient();
 
   const appInstance = new App();
   const app: Express = appInstance.app;

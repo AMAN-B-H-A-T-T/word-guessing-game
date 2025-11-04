@@ -1,9 +1,10 @@
 import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import jwt, { JwtPayload } from "jsonwebtoken";
 import {
   CHAR_SET,
   EXPIRE_TIME,
+  GAME,
   PROFILE,
   RANDOM_ID_STRING_LENGTH,
   SALT_ROUNDES,
@@ -19,6 +20,9 @@ import logger from "../configurations/logger.configurations";
 import ProfileValidators from "../module/profile/profile.validatior";
 import HttpException from "../exceptions/httpException";
 import { JWT_KEY } from "../configurations/env.configurations";
+import GameValidators from "../module/game/game.validators";
+import { AccessRole } from "../validators/validationSpecs.types";
+import BadRequestException from "../exceptions/badRequestException";
 const { INTERNAL_SERVER_ERROR } = STATUS_CODES;
 class CommonUtilities {
   static generateRandomID(
@@ -88,7 +92,7 @@ class CommonUtilities {
       throw new Error("Base-url is missing.");
     }
     const moduleName = baseurl.split("/").at(-1);
-    return moduleName.toUpperCase();
+    return moduleName;
   }
 
   static getModuleNameFromUrl(baseUrl: string): string {
@@ -167,8 +171,13 @@ class CommonUtilities {
   }
 
   static getModuleValidators(module: string) {
-    if (module === PROFILE) {
-      return ProfileValidators;
+    switch (module) {
+      case PROFILE:
+        return ProfileValidators;
+      case GAME:
+        return GameValidators;
+      default:
+        throw new Error("module validators is not found.");
     }
   }
 
@@ -215,6 +224,59 @@ class CommonUtilities {
         return response.status(400).json({
           error: error.message,
         });
+      }
+    };
+  }
+
+  static validateRequestAccees(
+    apiNameMap: Record<string, any>,
+    latestSpec: LatestSpec
+  ) {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { headers } = req;
+        const accountId = headers["account-id"];
+        const method: string = req.method,
+          baseUrl: string = req.baseUrl,
+          path: string = req.path;
+
+        let apiRequestSpec: any = null;
+        const moduleName: string = CommonUtilities.getModuleName(baseUrl);
+        const apiName: string = CommonUtilities.getAPINameFromUrl(
+          method,
+          path,
+          apiNameMap
+        );
+        apiRequestSpec = latestSpec.getModule(moduleName).validationSpec;
+        apiRequestSpec = apiRequestSpec[apiName];
+        const accessType = apiRequestSpec.access;
+        if (accessType === AccessRole.PUBLIC) {
+          next();
+          return;
+        }
+
+        let accessToken: string = headers["authorization"];
+        accessToken = accessToken.replace("Bearer ", "");
+
+        try {
+          const decodedData: JwtPayload = CommonUtilities.verifyToken(
+            accessToken
+          ) as JwtPayload;
+
+          if (decodedData?.id !== accountId) {
+            throw new BadRequestException("Un-authorized user access.");
+          }
+
+          next();
+        } catch (error) {
+          logger.error(`Error while verify token, message : ${error.message}`);
+          return CommonUtilities.sendErrorResponse(res, error);
+        }
+      } catch (error) {
+        logger.error(
+          `Error at validateRequestAccees with message : ${error.message}`
+        );
+        return CommonUtilities.sendErrorResponse(res, error);
       }
     };
   }
@@ -294,6 +356,11 @@ class CommonUtilities {
   static verifyToken(token: string) {
     const profile = jwt.verify(token, JWT_KEY);
     return profile;
+  }
+
+  static async generateRoomId(size: number = 6) {
+    const { nanoid } = await import("nanoid");
+    return nanoid(size).toUpperCase();
   }
 }
 

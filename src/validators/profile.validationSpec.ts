@@ -1,5 +1,5 @@
 import { CREATE, LOGIN } from "../constants/endpoint.constants";
-import { IValidationSpec } from "./validationSpecs.types";
+import { AccessRole, IValidationSpec } from "./validationSpecs.types";
 
 class ProfileValidationSpec {
   public validationSpec: IValidationSpec;
@@ -7,9 +7,11 @@ class ProfileValidationSpec {
     this.validationSpec = {
       [CREATE]: {
         body: "validateCreateProfileRequestBody",
+        access: AccessRole.PUBLIC,
       },
       [LOGIN]: {
         body: "validateLoginRequestBody",
+        access: AccessRole.PUBLIC,
       },
     };
   }

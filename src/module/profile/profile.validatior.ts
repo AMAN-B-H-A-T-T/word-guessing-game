@@ -1,8 +1,9 @@
 import Joi, { ObjectSchema } from "joi";
 import { ICreateProfileReqBody } from "./profile.types";
 import * as validationConsts from "../../constants/validations.constans";
+import IndexValidator from "../index.validators";
 
-class ProfileValidators {
+class ProfileValidators extends IndexValidator {
   static validateCreateProfileRequestBody(): ObjectSchema {
     const displayName = Joi.string().empty("").required().messages({
       "any.required": "Invalid display_name. display_name must not be balnk.",
