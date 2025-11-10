@@ -167,6 +167,19 @@ class GameUtility {
       status: state,
     };
 
+    const statusMapper: Record<string, Array<string>> = {
+      [GameStatus.INIT]: [GameStatus.ONGOING, GameStatus.ENDED],
+      [GameStatus.ONGOING]: [GameStatus.ENDED],
+    };
+    const gameKey = `game:${gameCode}:${gameId}:gameDetails`;
+    const status = (await redisClient.hGet(gameKey, "status")) as string;
+    const validStatus = statusMapper[status];
+
+    if (!validStatus.includes(state)) {
+      throw new BadRequestException(
+        `Invalid update operation. A game state from ${status} to ${state} is not allowed.`
+      );
+    }
     await gameServices.updateGame(gameId, updateDate);
 
     // update game state in redis

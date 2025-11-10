@@ -8,6 +8,9 @@ export const HEADER_CONSTS = {
   SPEED_REQUEST_HEADER: "request-id",
 };
 
+export const PRODUCTION = "production";
+export const DEVELOPMENT = "development";
+
 // Default alphabet without "_"
 export const ALPHA_NUMERIC =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-";

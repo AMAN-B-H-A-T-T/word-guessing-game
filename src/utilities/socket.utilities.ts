@@ -183,7 +183,8 @@ class SocketUtilities {
             playerId
           );
         } else {
-          await redisClient.del(`room:L6LR2B:gme_mhsoi4tyInhYph2y:members`);
+          const keys = await redisClient.keys("room:*:members");
+          await redisClient.del(keys);
         }
       });
     });
