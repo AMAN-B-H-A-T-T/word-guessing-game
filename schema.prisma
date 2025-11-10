@@ -8,11 +8,12 @@ generator client {
 }
 
 model Users {
-    id          String @id @db.VarChar(40)
-    displayName String @map("display_name") @db.VarChar(100)
-    userEmail   String @map("user_email") @db.VarChar(100)
+    id          String    @id @db.VarChar(40)
+    displayName String    @map("display_name") @db.VarChar(100)
+    userEmail   String    @map("user_email") @db.VarChar(100)
     password    String
-    avatarUrl   String @map("avatar_url") @db.VarChar(255)
+    avatarUrl   String    @map("avatar_url") @db.VarChar(255)
+    player      Players[]
     created     BigInt
     modified    BigInt
 
@@ -38,11 +39,12 @@ model Games {
 model Players {
     id            String @id @db.VarChar(40)
     userId        String @map("user_id") @db.VarChar(40)
-    gameId       String @map("game_id") @db.VarChar(40)
+    gameId        String @map("game_id") @db.VarChar(40)
     isGameCreator Int    @map("is_game_creator")
     status        Int    @default(1)
     score         Int    @default(0)
     created       BigInt
+    user          Users  @relation(fields: [userId], references: [id])
     modified      BigInt
 
     @@map("tbl_player")

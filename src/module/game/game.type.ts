@@ -1,4 +1,4 @@
-import { GameDifficultyType } from "@prisma/client";
+import { GameDifficultyType, Prisma } from "@prisma/client";
 
 export interface ICreateGame {
   rounds: number;
@@ -8,3 +8,9 @@ export interface ICreateGame {
   draw_time: number;
   word_count: number;
 }
+
+export type RedisPipelineResult<T = any> = [Error | null, T][];
+
+export type playerWithUserDetails = Prisma.PlayersGetPayload<{
+  include: { user: true };
+}>;

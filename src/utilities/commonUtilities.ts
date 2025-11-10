@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import {
+  ALPHA_NUMERIC,
   CHAR_SET,
   EXPIRE_TIME,
   GAME,
@@ -264,7 +265,10 @@ class CommonUtilities {
           ) as JwtPayload;
 
           if (decodedData?.id !== accountId) {
-            throw new BadRequestException("Un-authorized user access.");
+            throw new BadRequestException(
+              "The access token does not match the requested user context.",
+              "invalid_token_scope"
+            );
           }
 
           next();
@@ -359,8 +363,8 @@ class CommonUtilities {
   }
 
   static async generateRoomId(size: number = 6) {
-    const { nanoid } = await import("nanoid");
-    return nanoid(size).toUpperCase();
+    const { customAlphabet } = await import("nanoid");
+    return customAlphabet(ALPHA_NUMERIC, size)().toUpperCase();
   }
 }
 

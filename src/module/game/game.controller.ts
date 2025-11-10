@@ -5,7 +5,7 @@ import CommonUtilities from "../../utilities/commonUtilities";
 import * as consts from "../../constants/index.constants";
 import GameUtility from "./game.utilities";
 
-const { OK, CREATED } = consts.STATUS_CODES;
+const { CREATED } = consts.STATUS_CODES;
 class GameController {
   async createGame(
     request: Request<{}, {}, ICreateGame, {}>,

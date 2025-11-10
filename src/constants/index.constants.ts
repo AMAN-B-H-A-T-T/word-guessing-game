@@ -8,6 +8,10 @@ export const HEADER_CONSTS = {
   SPEED_REQUEST_HEADER: "request-id",
 };
 
+// Default alphabet without "_"
+export const ALPHA_NUMERIC =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-";
+
 // HTTP status code
 export const STATUS_CODES = {
   OK: 200,
@@ -37,3 +41,9 @@ export enum API_MODE {
   INTERNAL = "INTERNAL",
   EXTERNAL = "EXTERNAL",
 }
+
+export const DIFFICULTY_LEVEL_MAPPING: Record<number, any> = {
+  0: { name: "EASY", min_word_lenght: 3 },
+  1: { name: "MEDIUM", min_word_lenght: 5 },
+  2: { name: "HARD", min_word_lenght: 7 },
+};

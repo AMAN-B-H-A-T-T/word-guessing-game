@@ -6,13 +6,22 @@ import { initializeTracer } from "./logger.configurations";
 import { HEADER_CONSTS } from "../constants/index.constants";
 import indexMiddleware from "../module/index.middleware";
 import indexRouter from "../module/index";
+import http from "http";
+import { Server } from "socket.io";
+import SocketUtilities from "../utilities/socket.utilities";
 
 class App {
   public app: express.Express;
+  public server: http.Server;
 
   constructor() {
     this.app = express();
     this.configurations();
+
+    this.server = http.createServer(this.app);
+    const io = new Server(this.server);
+
+    new SocketUtilities(io);
   }
 
   private configurations(): void {

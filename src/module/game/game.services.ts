@@ -25,16 +25,12 @@ class GameService {
     return gameModel.create(query);
   }
 
-  createPlayer(data: Prisma.PlayersCreateInput) {
+  createPlayer(data: Prisma.PlayersUncheckedCreateInput) {
     const { players: playersModel } = database["prismaDrawPandasDB"];
     const query: Prisma.PlayersCreateArgs = {
       data,
-      select: {
-        isGameCreator: true,
-        id: true,
-        score: true,
-        gameId: true,
-        userId: true,
+      include: {
+        user: true,
       },
     };
 
@@ -92,6 +88,20 @@ class GameService {
     }
 
     return playerModel.findMany(query);
+  }
+
+  updateGame(gameId: string, data: Prisma.GamesUpdateInput) {
+    const { games: gameModel } = database["prismaDrawPandasDB"];
+
+    const currentTime = Date.now();
+    data.modified = currentTime;
+
+    const query: Prisma.GamesUpdateArgs = {
+      where: { id: gameId },
+      data,
+    };
+
+    return gameModel.update(query);
   }
 }
 export default new GameService();

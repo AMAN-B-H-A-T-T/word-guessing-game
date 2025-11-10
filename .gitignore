@@ -137,3 +137,9 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# deno locak 
+deno.lock
+
+# script folder 
+src/scripts

@@ -4,7 +4,6 @@ import logger from "./logger.configurations";
 
 let retryCount = 0;
 const MAX_RETRIES = 5;
-
 const redisClient = createClient({
   url: REDIS_CONNECTION_URL,
   socket: {

@@ -1,17 +1,13 @@
-import {
-  Prisma,
-  Games,
-  GameDifficultyType,
-  Players,
-  GameStatus,
-} from "@prisma/client";
+import { Prisma, Games, GameDifficultyType, GameStatus } from "@prisma/client";
 import CommonUtilities from "../../utilities/commonUtilities";
-import { ICreateGame } from "./game.type";
+import { ICreateGame, playerWithUserDetails } from "./game.type";
 import logger from "../../configurations/logger.configurations";
 import BadRequestException from "../../exceptions/badRequestException";
 import gameServices from "./game.services";
 import redisClient from "../../configurations/redis.configurations";
 import { API_MODE } from "../../constants/index.constants";
+import HelperUtilities from "../../utilities/helperUtilities";
+import drawableWords from "../../database/models/drawableWords";
 
 class GameUtility {
   static async createGame(
@@ -53,7 +49,7 @@ class GameUtility {
       throw new BadRequestException(error.message);
     }
 
-    await this.addPlayers(
+    const player = await this.addPlayers(
       accountId,
       createdGame.id,
       createdGame.gameCode,
@@ -67,6 +63,19 @@ class GameUtility {
       res
     );
 
+    await redisClient.hSet(
+      `game:${createdGame.gameCode}:${createdGame.id}:round`,
+      {
+        round: 0,
+        turn: "",
+      }
+    );
+
+    await redisClient.set(
+      `game:${createdGame.gameCode}:${createdGame.id}:roomCreator`,
+      player.id
+    );
+
     return res;
   }
 
@@ -77,47 +86,25 @@ class GameUtility {
     mode = API_MODE.EXTERNAL
   ) {
     if (mode === API_MODE.EXTERNAL) {
-      const gameWhereObject: Prisma.GamesWhereInput = {
-        id: gameId,
-        gameCode,
-        status: GameStatus.INIT,
-      };
-      const gameSelectObject: Prisma.GamesSelect = {
-        maxPlayers: true,
-      };
-
-      const gameData = await gameServices.fetchGameData({
-        whereObject: gameWhereObject,
-        selectObject: gameSelectObject,
-      });
-
-      if (!gameData) {
-        throw new BadRequestException("Invaid game. A game is not found.");
+      // check max playres reached
+      const gameData = await this.getGameDetails(gameCode, gameId);
+      const { max_players: maxPlayers, players } = gameData;
+      console.log(gameData);
+      console.log(gameData.status);
+      if (gameData.status !== GameStatus.INIT) {
+        throw new BadRequestException(
+          "A game is started. Now you can not join."
+        );
       }
 
-      // check max playres reached
-      const playerWhereObject: Prisma.PlayersWhereInput = {
-        gameId,
-        status: 1,
-      };
-
-      const playerSelectObject: Prisma.PlayersSelect = {
-        userId: true,
-      };
-
-      const players = await gameServices.fetchPlayers({
-        whereObject: playerWhereObject,
-        selectObject: playerSelectObject,
-      });
-
-      if (players.length + 1 > gameData.maxPlayers) {
+      if (players.length + 1 > maxPlayers) {
         throw new BadRequestException(
           "The game room is full. Maximum number of players has been reached."
         );
       }
 
       const isAlreadyAdded = players.some(
-        (player) => player.userId === accountId
+        (player: any) => player.user_id === accountId
       );
 
       if (isAlreadyAdded) {
@@ -126,18 +113,21 @@ class GameUtility {
         );
       }
     }
+
     // create game-player mapping
     const currentTime = Date.now();
-    const mappingPayload: Prisma.PlayersCreateInput = {
+    const mappingPayload: Prisma.PlayersUncheckedCreateInput = {
       id: CommonUtilities.generateRandomID("ply"),
       gameId: gameId,
       userId: accountId,
-      isGameCreator: 1,
+      isGameCreator: Number(mode === API_MODE.INTERNAL),
       created: currentTime,
       modified: currentTime,
     };
 
-    const createdPlayer = await gameServices.createPlayer(mappingPayload);
+    const createdPlayer = (await gameServices.createPlayer(
+      mappingPayload
+    )) as playerWithUserDetails;
     const playerDetails = this.buildPlayerResponse(createdPlayer);
 
     // add player to set
@@ -157,13 +147,158 @@ class GameUtility {
       `game:${gameCode}:${gameId}:turns`,
       createdPlayer.id
     );
+
+    // add player score details
+    await redisClient.hSet(
+      `game:${gameCode}:${gameId}:round`,
+      createdPlayer.id,
+      0
+    );
+
     return playerDetails;
+  }
+
+  static async updateGameState(
+    state: GameStatus,
+    gameId: string,
+    gameCode: string
+  ) {
+    const updateDate: Prisma.GamesUpdateInput = {
+      status: state,
+    };
+
+    await gameServices.updateGame(gameId, updateDate);
+
+    // update game state in redis
+    await redisClient.hSet(`game:${gameCode}:${gameId}:gameDetails`, {
+      status: state,
+      modified: Date.now(),
+    });
+  }
+
+  static async getGameDetails(
+    gameCode: string,
+    gameId: string
+  ): Promise<Record<string, any>> {
+    let gameData = await redisClient.hGetAll(
+      `game:${gameCode}:${gameId}:gameDetails`
+    );
+
+    if (!gameData) {
+      const gameWhereObject: Prisma.GamesWhereInput = {
+        id: gameId,
+        gameCode,
+        status: GameStatus.INIT,
+      };
+      const gameSelectObject: Prisma.GamesSelect = {
+        maxPlayers: true,
+      };
+
+      const gameData = await gameServices.fetchGameData({
+        whereObject: gameWhereObject,
+        selectObject: gameSelectObject,
+      });
+
+      if (!gameData) {
+        throw new BadRequestException("Invaid game. A game is not found.");
+      }
+    }
+
+    const players = (await redisClient.sMembers(
+      `game:${gameCode}:${gameId}:players`
+    )) as string[];
+    const pipeline = redisClient.multi();
+
+    let playerDetails: Array<Record<string, any>> = [];
+
+    if (players || players.length) {
+      for (const playerId of players) {
+        pipeline.hGetAll(`game:${gameCode}:${playerId}:playerDetails`);
+      }
+      const result = await pipeline.exec();
+
+      playerDetails = result.map((data: any) => {
+        return data;
+      });
+    } else {
+      const playerWhereObject: Prisma.PlayersWhereInput = {
+        gameId,
+      };
+
+      const players = (await gameServices.fetchPlayers({
+        whereObject: playerWhereObject,
+        includeObject: {
+          user: true,
+        },
+      })) as playerWithUserDetails[];
+
+      playerDetails = players.map((player) => this.buildPlayerResponse(player));
+    }
+
+    return {
+      ...gameData,
+      players: playerDetails,
+    };
+  }
+
+  static async handelTurns(gameCode: string, gameId: string) {
+    const key = `game:${gameCode}:${gameId}:turns`;
+    const roundKey = `game:${gameCode}:${gameId}:round`;
+
+    const currentPlayerTurn = await redisClient.lIndex(key, 0);
+    console.log("current player", currentPlayerTurn);
+    const roomCreator = await redisClient.get(
+      `game:${gameCode}:${gameId}:roomCreator`
+    );
+    console.log("room creator", roomCreator);
+    if (currentPlayerTurn === roomCreator) {
+      await redisClient.hIncrBy(roundKey, "round", 1);
+    }
+
+    // update player turn
+    await redisClient.hSet(roundKey, "turn", currentPlayerTurn);
+
+    // update queue
+    await redisClient.rPopLPush(key, key);
+
+    const response = await HelperUtilities.buildRoundData(gameCode, gameId);
+    return response;
+  }
+
+  static async updateGameSettings(gameId: string, data: Record<string, any>) {
+    await gameServices.updateGame(gameId, data);
+    return;
+  }
+
+  static async getDrawableWordsOptions(settings: Record<string, any>) {
+    const query: Array<any> = [
+      {
+        length: { $gte: settings.min_word_lenght },
+      },
+      {
+        $sample: { size: settings.word_count },
+      },
+      {
+        $project: {
+          _id: 0,
+          word: 1,
+        },
+      },
+      {
+        $sort: {
+          word: 1,
+        },
+      },
+    ];
+
+    const words = await drawableWords.aggregate(query);
+    return this.buildWordsList(words);
   }
 
   static buildGameResponse(game: Games) {
     return {
       id: game.id,
-      stauts: game.status,
+      status: game.status,
       rounds: game.rounds,
       difficulty_level: game.difficulty,
       max_players: game.maxPlayers,
@@ -176,13 +311,19 @@ class GameUtility {
     };
   }
 
-  static buildPlayerResponse(player: Players) {
+  static buildPlayerResponse(player: playerWithUserDetails) {
     return {
       id: player.id,
       score: player.score,
       user_id: player.userId,
       is_game_creator: player.isGameCreator,
+      display_name: player.user.displayName,
+      avatar_url: player.user.avatarUrl,
     };
+  }
+
+  static buildWordsList(words: Array<any>) {
+    return words.map((word) => word.word);
   }
 }
 export default GameUtility;
