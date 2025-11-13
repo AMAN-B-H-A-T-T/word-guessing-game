@@ -76,7 +76,7 @@ class GameUtility {
       player.id
     );
 
-    return res;
+    return { ...res, player_id: player.id };
   }
 
   static async addPlayers(
@@ -89,8 +89,7 @@ class GameUtility {
       // check max playres reached
       const gameData = await this.getGameDetails(gameCode, gameId);
       const { max_players: maxPlayers, players } = gameData;
-      console.log(gameData);
-      console.log(gameData.status);
+
       if (gameData.status !== GameStatus.INIT) {
         throw new BadRequestException(
           "A game is started. Now you can not join."
@@ -140,12 +139,6 @@ class GameUtility {
     await redisClient.hSet(
       `game:${gameCode}:${createdPlayer.id}:playerDetails`,
       playerDetails
-    );
-
-    // push playres to turns list
-    await redisClient.rPush(
-      `game:${gameCode}:${gameId}:turns`,
-      createdPlayer.id
     );
 
     // add player score details
@@ -257,15 +250,19 @@ class GameUtility {
   static async handelTurns(gameCode: string, gameId: string) {
     const key = `game:${gameCode}:${gameId}:turns`;
     const roundKey = `game:${gameCode}:${gameId}:round`;
+    const gameDetailsKey = `game:${gameCode}:${gameId}:gameDetails`;
 
     const currentPlayerTurn = await redisClient.lIndex(key, 0);
-    console.log("current player", currentPlayerTurn);
+    const totalRounds = await redisClient.hGet(gameDetailsKey, "rounds");
     const roomCreator = await redisClient.get(
       `game:${gameCode}:${gameId}:roomCreator`
     );
-    console.log("room creator", roomCreator);
+
     if (currentPlayerTurn === roomCreator) {
-      await redisClient.hIncrBy(roundKey, "round", 1);
+      const updatedRound = await redisClient.hIncrBy(roundKey, "round", 1);
+      if (updatedRound > totalRounds) {
+        return "GAME_ENDED";
+      }
     }
 
     // update player turn
@@ -278,7 +275,31 @@ class GameUtility {
     return response;
   }
 
-  static async updateGameSettings(gameId: string, data: Record<string, any>) {
+  static async updateGameSettings(
+    gameCode: string,
+    gameId: string,
+    playerId: string,
+    data: Record<string, any>
+  ) {
+    const gameKey = `game:${gameCode}:${gameId}:gameDetails`;
+    const status = await redisClient.hGet(gameKey, "status");
+
+    if (status !== GameStatus.INIT) {
+      throw new BadRequestException(
+        `Invalid update operation. A setttings of running game can not be updated.`
+      );
+    }
+
+    const roomCreator = await redisClient.get(
+      `game:${gameCode}:${gameId}:roomCreator`
+    );
+
+    if (playerId !== roomCreator) {
+      throw new BadRequestException(
+        "Invalid update operation. A game creator only update settings."
+      );
+    }
+
     await gameServices.updateGame(gameId, data);
     return;
   }
@@ -286,7 +307,12 @@ class GameUtility {
   static async getDrawableWordsOptions(settings: Record<string, any>) {
     const query: Array<any> = [
       {
-        length: { $gte: settings.min_word_lenght },
+        $match: {
+          letter_count: {
+            $gte: settings.min_word_length,
+            ...(settings.max_word_length && { $lte: settings.max_word_length }),
+          },
+        },
       },
       {
         $sample: { size: settings.word_count },
@@ -299,13 +325,21 @@ class GameUtility {
       },
       {
         $sort: {
-          word: 1,
+          word: -1,
         },
       },
     ];
 
     const words = await drawableWords.aggregate(query);
     return this.buildWordsList(words);
+  }
+
+  static async updatePlayerStatus(status: number, playerId: string) {
+    const updateInput: Prisma.PlayersUpdateInput = {
+      status,
+    };
+
+    await gameServices.updatePlayer(playerId, updateInput);
   }
 
   static buildGameResponse(game: Games) {
@@ -328,6 +362,7 @@ class GameUtility {
     return {
       id: player.id,
       score: player.score,
+      status: player.status,
       user_id: player.userId,
       is_game_creator: player.isGameCreator,
       display_name: player.user.displayName,

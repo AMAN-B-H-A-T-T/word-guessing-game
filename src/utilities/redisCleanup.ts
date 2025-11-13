@@ -1,7 +1,7 @@
 import logger from "../configurations/logger.configurations.js";
 import redisClient from "../configurations/redis.configurations.js";
 
-async function deleteGameTemporaryData(keyPattern: string) {
+export async function deleteGameTemporaryData(keyPattern: string) {
   logger.info(`🧹 Starting Redis cleanup for pattern: ${keyPattern}`);
 
   let cursor = "0"; // must be a string

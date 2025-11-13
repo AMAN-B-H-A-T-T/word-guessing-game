@@ -1,7 +1,10 @@
-import { Prisma } from "@prisma/client";
+import { GameStatus, Prisma } from "@prisma/client";
 import redisClient from "../configurations/redis.configurations";
 import BadRequestException from "../exceptions/badRequestException";
-import { boolean } from "joi";
+import CommonUtilities from "./commonUtilities";
+import GameUtility from "../module/game/game.utilities";
+import { deleteGameTemporaryData } from "./redisCleanup";
+import { playerStausType } from "../module/index.types";
 
 class HelperUtilities {
   static async checkPlayerAlreadyInRoom(roomId: string, playerId: string) {
@@ -55,11 +58,10 @@ class HelperUtilities {
     const data: Record<string, any> = await redisClient.hGetAll(
       `game:${gameCode}:${gameId}:round`
     );
-    console.log(data);
 
     return data;
   }
-
+  // [round,difficulty,maxPlayers,minWordLength,wordCount,drawTime]
   static async prepareSesttingData(data: Array<any>) {
     const settingsPayload: Prisma.GamesUpdateInput = {
       rounds: data[0],
@@ -71,6 +73,115 @@ class HelperUtilities {
     };
 
     return settingsPayload;
+  }
+
+  // [word,difficulty,time,attempts]
+  static async processguess(
+    gameCode: string,
+    gameId: string,
+    playerId: string,
+    metadata: Array<any>
+  ) {
+    const word = metadata[0];
+    const difficulty = metadata[1];
+    const time = metadata[2];
+    const attempts = metadata[3];
+    const trimmedWord = word.trim();
+    const key = `game:${gameCode}:${gameId}:selectedWord`;
+    const selectedWord = await redisClient.get(key);
+    const roundKey = `game:${gameCode}:${gameId}:round`;
+
+    if (trimmedWord !== selectedWord) {
+      const penalty = CommonUtilities.calculateScore(
+        false,
+        100,
+        time,
+        difficulty,
+        attempts
+      );
+      await redisClient.hIncrBy(roundKey, playerId, penalty);
+      return 0;
+    }
+    const score = CommonUtilities.calculateScore(
+      true,
+      100,
+      time,
+      difficulty,
+      attempts
+    );
+
+    // increase player score who drawing object
+    const playreTurn = await redisClient.hGet(roundKey, "turn");
+    const drawingScore = CommonUtilities.calculateScore(
+      true,
+      47,
+      time,
+      difficulty,
+      attempts
+    );
+    await redisClient.hIncrBy(roundKey, playreTurn, drawingScore);
+    // increment  player score
+    await redisClient.hIncrBy(roundKey, playerId, score);
+
+    return score;
+  }
+
+  static async handlePlayerDisconnection(
+    gameCode: string,
+    gameId: string,
+    playerId: string
+  ) {
+    const memberKey = `room:${gameCode}:${gameId}:members`;
+    const turnsKey = `game:${gameCode}:${gameId}:turns`;
+    const playerDetailsKey = `game:${gameCode}:${playerId}:playerDetails`;
+
+    //find all playres online in room
+    const members = (await redisClient.sMembers(memberKey)) as string[];
+    if (!members.length) {
+      return 0;
+    }
+    const isPlayerExist = members.some((memberId) => memberId === playerId);
+
+    if (!isPlayerExist) {
+      throw new BadRequestException("Playres details are not found.");
+    }
+
+    if (members.length - 1 === 1) {
+      // mark the game as the ongoing to ended
+      await GameUtility.updateGameState(GameStatus.ENDED, gameId, gameCode);
+      const pattern = `*:${gameCode}:${gameId}:*`;
+      await deleteGameTemporaryData(pattern);
+
+      return -1;
+    }
+
+    // remove player from members set
+    await redisClient.sRem(memberKey, playerId);
+
+    // remove playre from turns list
+    await redisClient.lRem(turnsKey, 1, playerId);
+
+    // update player status
+    await redisClient.del(playerDetailsKey);
+
+    //update player status in DB
+    await GameUtility.updatePlayerStatus(playerStausType.offline, playerId);
+
+    return 1;
+  }
+
+  static async protectedEvents(
+    gameCode: string,
+    gameId: string,
+    playerId: string
+  ) {
+    const roundKey = `game:${gameCode}:${gameId}:round`;
+    const turnPlayer = (await redisClient.hGet(roundKey, "turn")) as string;
+    if (turnPlayer !== playerId) {
+      throw new BadRequestException(
+        "This event can only be sent by the player whose turn is currently active."
+      );
+    }
   }
 }
 export default HelperUtilities;

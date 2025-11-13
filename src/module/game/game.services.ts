@@ -103,5 +103,17 @@ class GameService {
 
     return gameModel.update(query);
   }
+
+  updatePlayer(playerId: string, data: Prisma.PlayersUpdateInput) {
+    const { players: playerModel } = database["prismaDrawPandasDB"];
+    const query: Prisma.PlayersUpdateArgs = {
+      where: {
+        id: playerId,
+      },
+      data,
+    };
+
+    return playerModel.update(query);
+  }
 }
 export default new GameService();

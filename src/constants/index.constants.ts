@@ -46,7 +46,7 @@ export enum API_MODE {
 }
 
 export const DIFFICULTY_LEVEL_MAPPING: Record<number, any> = {
-  0: { name: "EASY", min_word_lenght: 3 },
-  1: { name: "MEDIUM", min_word_lenght: 5 },
-  2: { name: "HARD", min_word_lenght: 7 },
+  1: { name: "EASY", min_word_lenght: 3 },
+  2: { name: "MEDIUM", min_word_lenght: 5 },
+  3: { name: "HARD", min_word_lenght: 7 },
 };

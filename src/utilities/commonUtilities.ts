@@ -366,6 +366,22 @@ class CommonUtilities {
     const { customAlphabet } = await import("nanoid");
     return customAlphabet(ALPHA_NUMERIC, size)().toUpperCase();
   }
+
+  static calculateScore(
+    isCorrect: boolean,
+    base: number,
+    timeTaken: number,
+    difficultyLevel: number,
+    attempts: number
+  ) {
+    if (!isCorrect) return -10 * attempts; // penalty
+
+    const timeBonus = Math.max(0, 50 - timeTaken); // faster = more bonus
+    const difficultyMultiplier = difficultyLevel * 1.5;
+    const attemptPenalty = (attempts - 1) * 10;
+
+    return (base + timeBonus) * difficultyMultiplier - attemptPenalty;
+  }
 }
 
 export default CommonUtilities;
