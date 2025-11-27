@@ -24,6 +24,8 @@ import { JWT_KEY } from "../configurations/env.configurations";
 import GameValidators from "../module/game/game.validators";
 import { AccessRole } from "../validators/validationSpecs.types";
 import BadRequestException from "../exceptions/badRequestException";
+import UnAuthorizedException from "../exceptions/unAuthorizedReqeustException";
+import NotFoundRequestException from "../exceptions/notFoundException";
 const { INTERNAL_SERVER_ERROR } = STATUS_CODES;
 class CommonUtilities {
   static generateRandomID(
@@ -260,21 +262,32 @@ class CommonUtilities {
         accessToken = accessToken.replace("Bearer ", "");
 
         try {
+          if (!accessToken) {
+            throw new NotFoundRequestException(
+              "Invalid access token.A token is missing."
+            );
+          }
           const decodedData: JwtPayload = CommonUtilities.verifyToken(
             accessToken
           ) as JwtPayload;
 
           if (decodedData?.id !== accountId) {
-            throw new BadRequestException(
-              "The access token does not match the requested user context.",
-              "invalid_token_scope"
+            throw new UnAuthorizedException(
+              "The access token does not match the requested user context."
             );
           }
 
           next();
         } catch (error) {
-          logger.error(`Error while verify token, message : ${error.message}`);
-          return CommonUtilities.sendErrorResponse(res, error);
+          const errorType = error.name;
+          switch (errorType) {
+            case "TokenExpiredError":
+              throw new UnAuthorizedException(error.message, "invaild_token");
+            case "JsonWebTokenError":
+              throw new BadRequestException(error.message);
+            default:
+              throw new Error(error.message);
+          }
         }
       } catch (error) {
         logger.error(

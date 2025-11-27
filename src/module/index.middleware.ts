@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import rtracer from "cls-rtracer";
 import { HEADER_CONSTS } from "../constants/index.constants";
-import { initializeTracer } from "../configurations/logger.configurations";
+import logger, {
+  initializeTracer,
+} from "../configurations/logger.configurations";
 import CommonUtilities from "../utilities/commonUtilities";
 
 const { SPEED_REQUEST_HEADER } = HEADER_CONSTS;
@@ -14,12 +16,13 @@ class IndexMiddleware {
     _response: Response,
     next: NextFunction
   ): void {
-    const speedRequest: string = request.headers[
-      SPEED_REQUEST_HEADER
-    ] as string;
+    let speedRequest: string = request.headers[SPEED_REQUEST_HEADER] as string;
+    const method = request.method;
+    const baseUrl = request.path;
 
     if (CommonUtilities.isEmpty(speedRequest)) {
-      request.headers[SPEED_REQUEST_HEADER] = rtracer.id() as string;
+      speedRequest = rtracer.id() as string;
+      request.headers[SPEED_REQUEST_HEADER] = speedRequest;
     } else {
       initializeTracer(request.headers[SPEED_REQUEST_HEADER] as string);
     }
@@ -29,6 +32,7 @@ class IndexMiddleware {
       request.headers[SPEED_REQUEST_HEADER]
     );
 
+    logger.info(`[${method}] : ${baseUrl}`);
     next();
   }
 

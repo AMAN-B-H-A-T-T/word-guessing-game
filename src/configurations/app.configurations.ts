@@ -19,7 +19,7 @@ class App {
     this.configurations();
 
     this.server = http.createServer(this.app);
-    const io = new Server(this.server);
+    const io = new Server(this.server, { cors: { allowedHeaders: "*" } });
 
     new SocketUtilities(io);
   }
@@ -27,7 +27,12 @@ class App {
   private configurations(): void {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: false }));
-    this.app.use(cors());
+    this.app.use(
+      cors({
+        origin: "http://localhost:3000",
+        credentials: true,
+      })
+    );
 
     this.app.use(
       rTracer.expressMiddleware({

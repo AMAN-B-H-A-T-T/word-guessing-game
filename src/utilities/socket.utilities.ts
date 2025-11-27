@@ -259,10 +259,10 @@ class SocketUtilities {
        * @description : braodcast drawing board data realtime to players
        * @returns : data broadcasted : event : "metadata"
        */
-      socket.on("metadata", (metadata) => {
-        const [roomId, data] = metadata;
-        return this.broadcastDrawingData(socket, roomId, data);
-      });
+      // socket.on("metadata", (metadata) => {
+      //   const [roomId, data] = metadata;
+      //   return this.broadcastDrawingData(socket, roomId, data);
+      // });
 
       socket.on("disconnect", async () => {
         const id = this.socketIdtoRoomIdMap[socket.id];
@@ -279,6 +279,44 @@ class SocketUtilities {
           const keys = await redisClient.keys("room:*:members");
           await redisClient.del(keys);
         }
+      });
+
+      /**
+       * ============================================
+       * REAL-TIME DRAWING WITH ZERO-COPY BROADCASTING
+       * =============================================
+       */
+
+      // Batched strokes - most efficient
+      socket.on("stroke-batch", (data) => {
+        const roomId = data.roomId;
+
+        // Direct broadcast - no processing, just relay
+        this.emitToRoom(socket, "stroke-batch", roomId, data);
+      });
+
+      // Single critical strokes (fills, etc.)
+      socket.on("single-stroke", (data) => {
+        const roomId = data.roomId;
+
+        // Direct broadcast
+        this.emitToRoom(socket, "single-stroke", roomId, data);
+      });
+
+      // Canvas clear
+      socket.on("canvas-clear", (data) => {
+        const roomId = data.roomId;
+
+        // Direct broadcast
+        this.emitToRoom(socket, "canvas-clear", roomId, data);
+      });
+
+      // Complete drawing sync (for new users)
+      socket.on("drawing-sync", (data) => {
+        const roomId = data.roomId;
+
+        // Broadcast to room
+        this.emitToRoom(socket, "drawing-sync", roomId, data);
       });
     });
 
@@ -299,8 +337,8 @@ class SocketUtilities {
     socket.emit("server_error", data);
   }
 
-  private broadcastDrawingData(socket: Socket, roomId: string, data: any) {
-    socket.to(roomId).emit("metadata", data);
+  private emitToRoom(socket: Socket, event: string, roomId: string, data: any) {
+    socket.to(roomId).emit(event, data);
   }
   private broadcastErrorMessage(roomId: string, data: Record<string, any>) {
     this.io.to(roomId).emit("broadcast_error", data);
