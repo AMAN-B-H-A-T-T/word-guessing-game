@@ -1,4 +1,4 @@
-import { ADD_PLAYER, CREATE } from "../constants/endpoint.constants";
+import { ADD_PLAYER, CREATE, END_GAME } from "../constants/endpoint.constants";
 import { AccessRole, IValidationSpec } from "./validationSpecs.types";
 
 class GameValidationSpecs {
@@ -13,6 +13,9 @@ class GameValidationSpecs {
       },
       [ADD_PLAYER]: {
         body: "validateAddplayerRequestBody",
+        access: AccessRole.PRIVATE,
+      },
+      [END_GAME]: {
         access: AccessRole.PRIVATE,
       },
     };

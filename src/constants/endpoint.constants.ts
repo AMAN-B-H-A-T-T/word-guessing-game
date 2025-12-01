@@ -8,3 +8,4 @@ export const ADD_PLAYER = "/add-player";
 // MODUEL ROUTES
 export const PROFILE_ROUTES = "/profile";
 export const GAME_ROUTES = "/game";
+export const END_GAME = "/end-game";

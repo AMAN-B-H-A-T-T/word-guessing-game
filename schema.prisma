@@ -22,6 +22,7 @@ model Users {
 
 model Games {
     id            String             @id @db.VarChar(40)
+    createdBy     String             @map("created_by") @db.VarChar(40)
     rounds        Int
     maxPlayers    Int                @map("max_players")
     gameCode      String             @map("game_code") @db.VarChar(20)

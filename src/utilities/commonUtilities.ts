@@ -286,6 +286,9 @@ class CommonUtilities {
             case "JsonWebTokenError":
               throw new BadRequestException(error.message);
             default:
+              if (error instanceof UnAuthorizedException) {
+                throw new UnAuthorizedException(error.message, error.type);
+              }
               throw new Error(error.message);
           }
         }
@@ -373,6 +376,11 @@ class CommonUtilities {
   static verifyToken(token: string) {
     const profile = jwt.verify(token, JWT_KEY);
     return profile;
+  }
+
+  static decodeToken(token: string) {
+    const data = jwt.decode(token, { complete: true });
+    return data;
   }
 
   static async generateRoomId(size: number = 6) {

@@ -31,6 +31,7 @@ class App {
       cors({
         origin: "http://localhost:3000",
         credentials: true,
+        exposedHeaders: ["account-id"],
       })
     );
 

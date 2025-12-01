@@ -1,16 +1,25 @@
-import { ADD_PLAYER, CREATE, LOGIN } from "../constants/endpoint.constants";
+import {
+  ADD_PLAYER,
+  CREATE,
+  END_GAME,
+  LOGIN,
+} from "../constants/endpoint.constants";
 
 export const RequestValidationMapping = {
-  GET: {},
+  GET: {
+    "with-id": "with-id",
+  },
   POST: {
     create: CREATE,
     login: LOGIN,
     "add-player": ADD_PLAYER,
   },
-  PUT: {},
+  PUT: {
+    "end-game": END_GAME,
+  },
 };
 
 export const apiNameMap = {
-  profile: [CREATE, LOGIN],
-  game: [CREATE, ADD_PLAYER],
+  profile: [CREATE, LOGIN, "with-id"],
+  game: [CREATE, ADD_PLAYER, END_GAME],
 };

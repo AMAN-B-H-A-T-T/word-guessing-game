@@ -13,6 +13,9 @@ class ProfileValidationSpec {
         body: "validateLoginRequestBody",
         access: AccessRole.PUBLIC,
       },
+      "with-id": {
+        access: AccessRole.PRIVATE,
+      },
     };
   }
 }

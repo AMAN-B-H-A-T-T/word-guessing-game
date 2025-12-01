@@ -24,12 +24,32 @@ class ProfileController {
       const { body } = request;
       const newBody = await ProfileUtilities.login(body);
 
+      response.header("account-id", newBody.accountId);
+
+      delete newBody.accountId;
+
       return CommonUtilities.sendResponse(response, {
         httpCode: OK,
         data: newBody,
       });
     } catch (error) {
       logger.error(`Error at loginUser with message: ${error.message}`);
+      CommonUtilities.sendErrorResponse(response, error);
+    }
+  }
+
+  public async getPlayerProfile(request: Request, response: Response) {
+    try {
+      const { params } = request;
+      const userId = params.id;
+
+      const newBody = await ProfileUtilities.fetchPlayerProfile(userId);
+      return CommonUtilities.sendResponse(response, {
+        httpCode: OK,
+        data: newBody,
+      });
+    } catch (error) {
+      logger.error(`Error at getplayerProfile with message: ${error.message}`);
       CommonUtilities.sendErrorResponse(response, error);
     }
   }

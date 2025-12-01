@@ -1,8 +1,9 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, Users } from "@prisma/client";
 import BadRequestException from "../../exceptions/badRequestException";
 import CommonUtilities from "../../utilities/commonUtilities";
 import profileServices from "./profile.services";
 import { ICreateProfileReqBody } from "./profile.types";
+import NotFoundRequestException from "../../exceptions/notFoundException";
 
 class ProfileUtilities {
   static async createProfile(body: ICreateProfileReqBody) {
@@ -71,7 +72,29 @@ class ProfileUtilities {
 
     const token = CommonUtilities.generateAuthToken(tokenPaylaod);
 
-    return { access: token };
+    return { access: token, accountId: createdProfile.id };
+  }
+
+  static async fetchPlayerProfile(id: string) {
+    if (!id) {
+      throw new BadRequestException("Invaild request. player_id is missing.");
+    }
+
+    const whereObject: Prisma.UsersWhereInput = {
+      id,
+    };
+
+    const profile = await profileServices.fetchProfile({
+      whereObject,
+    });
+
+    if (!profile) {
+      throw new NotFoundRequestException(
+        `Invalid player_id. A profile details for id:${id} is not found.`
+      );
+    }
+
+    return this.buildUserProfileResponse(profile);
   }
 
   static buildUserProfileResponse(profile: Record<string, any>) {

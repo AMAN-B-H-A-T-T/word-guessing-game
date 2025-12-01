@@ -58,11 +58,6 @@ class GameValidators extends IndexValidator {
   }
 
   static validateAddplayerRequestBody() {
-    const gameIdField = Joi.string().empty("").required().messages({
-      "any.required": "Invalid game_id.game_id must be required.",
-      "string.empty": "Invalid game_id.game_id must not be blank.",
-    });
-
     const gameCodeField = Joi.string().empty("").length(6).required().messages({
       "any.required": "Invalid game_code. game_code must be required.",
       "string.empty": "Invalid game_code. game_code must not be blank.",
@@ -70,7 +65,6 @@ class GameValidators extends IndexValidator {
     });
 
     const objectSchema: ObjectSchema = Joi.object({
-      game_id: gameIdField,
       game_code: gameCodeField,
     });
 

@@ -8,6 +8,8 @@ import redisClient from "../../configurations/redis.configurations";
 import { API_MODE } from "../../constants/index.constants";
 import HelperUtilities from "../../utilities/helperUtilities";
 import drawableWords from "../../database/models/drawableWords";
+import NotFoundRequestException from "../../exceptions/notFoundException";
+import { deleteGameTemporaryData } from "../../utilities/redisCleanup";
 
 class GameUtility {
   static async createGame(
@@ -22,6 +24,7 @@ class GameUtility {
     // create game payload
     const gamepayLoad: Prisma.GamesCreateInput = {
       id: CommonUtilities.generateRandomID("gme"),
+      createdBy: accountId,
       rounds: gameData.rounds,
       gameCode,
       drawTime: gameData.draw_time,
@@ -49,18 +52,18 @@ class GameUtility {
       throw new BadRequestException(error.message);
     }
 
-    const player = await this.addPlayers(
-      accountId,
-      createdGame.id,
-      createdGame.gameCode,
-      API_MODE.INTERNAL
-    );
     const res = this.buildGameResponse(createdGame);
 
     // add game to redis
     await redisClient.hSet(
       `game:${createdGame.gameCode}:${createdGame.id}:gameDetails`,
       res
+    );
+
+    const player = await this.addPlayers(
+      accountId,
+      createdGame.gameCode,
+      API_MODE.INTERNAL
     );
 
     await redisClient.hSet(
@@ -81,13 +84,20 @@ class GameUtility {
 
   static async addPlayers(
     accountId: string,
-    gameId: string,
     gameCode: string,
     mode = API_MODE.EXTERNAL
   ) {
+    const whereObject: Prisma.GamesWhereInput = {
+      gameCode,
+    };
+    const createdGame = await gameServices.fetchGameData({
+      whereObject,
+      selectObject: { id: true },
+    });
+
+    const gameData = await this.getGameDetails(gameCode, createdGame.id ?? "");
     if (mode === API_MODE.EXTERNAL) {
       // check max playres reached
-      const gameData = await this.getGameDetails(gameCode, gameId);
       const { max_players: maxPlayers, players } = gameData;
 
       if (gameData.status !== GameStatus.INIT) {
@@ -117,7 +127,7 @@ class GameUtility {
     const currentTime = Date.now();
     const mappingPayload: Prisma.PlayersUncheckedCreateInput = {
       id: CommonUtilities.generateRandomID("ply"),
-      gameId: gameId,
+      gameId: gameData.id,
       userId: accountId,
       isGameCreator: Number(mode === API_MODE.INTERNAL),
       created: currentTime,
@@ -131,7 +141,7 @@ class GameUtility {
 
     // add player to set
     await redisClient.sAdd(
-      `game:${gameCode}:${gameId}:players`,
+      `game:${gameCode}:${gameData.id}:players`,
       createdPlayer.id
     );
 
@@ -143,7 +153,7 @@ class GameUtility {
 
     // add player score details
     await redisClient.hSet(
-      `game:${gameCode}:${gameId}:round`,
+      `game:${gameCode}:${gameData.id}:round`,
       createdPlayer.id,
       0
     );
@@ -186,28 +196,25 @@ class GameUtility {
     gameCode: string,
     gameId: string
   ): Promise<Record<string, any>> {
-    let gameData = await redisClient.hGetAll(
+    let gameData: any = await redisClient.hGetAll(
       `game:${gameCode}:${gameId}:gameDetails`
     );
 
-    if (!gameData) {
+    if (!gameData || !Object.keys(gameData).length) {
       const gameWhereObject: Prisma.GamesWhereInput = {
         id: gameId,
         gameCode,
         status: GameStatus.INIT,
       };
-      const gameSelectObject: Prisma.GamesSelect = {
-        maxPlayers: true,
-      };
 
-      const gameData = await gameServices.fetchGameData({
+      const createdGame = await gameServices.fetchGameData({
         whereObject: gameWhereObject,
-        selectObject: gameSelectObject,
       });
 
-      if (!gameData) {
+      if (!createdGame) {
         throw new BadRequestException("Invaid game. A game is not found.");
       }
+      gameData = this.buildGameResponse(createdGame);
     }
 
     const players = (await redisClient.sMembers(
@@ -217,7 +224,7 @@ class GameUtility {
 
     let playerDetails: Array<Record<string, any>> = [];
 
-    if (players || players.length) {
+    if (players?.length || players) {
       for (const playerId of players) {
         pipeline.hGetAll(`game:${gameCode}:${playerId}:playerDetails`);
       }
@@ -340,6 +347,38 @@ class GameUtility {
     };
 
     await gameServices.updatePlayer(playerId, updateInput);
+  }
+
+  static async endGame(gameId: string, accountId: string) {
+    const whereObject: Prisma.GamesWhereInput = {
+      id: gameId,
+      createdBy: accountId,
+    };
+
+    const existingGame = await gameServices.fetchGameData({ whereObject });
+
+    if (!existingGame) {
+      throw new NotFoundRequestException(
+        `Invaid game_id. A game with id:${gameId} is not found.`
+      );
+    }
+
+    if (existingGame.status === GameStatus.ENDED) {
+      throw new BadRequestException(
+        "Invalid operation. A game is already ended."
+      );
+    }
+
+    const payload: Prisma.GamesUpdateInput = {
+      status: GameStatus.ENDED,
+    };
+
+    await gameServices.updateGame(gameId, payload);
+
+    const pattern = `*:${existingGame.gameCode}:${gameId}:*`;
+    await deleteGameTemporaryData(pattern);
+
+    return true;
   }
 
   static buildGameResponse(game: Games) {
