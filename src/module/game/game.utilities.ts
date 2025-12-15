@@ -327,7 +327,6 @@ class GameUtility {
     };
     const gameDatailsKey = `game:${gameCode}:${gameId}:gameDetails`;
     await redisClient.hSet(gameDatailsKey, gameSettings);
-    const updatedDetails = await redisClient.hGetAll(gameDatailsKey);
     return;
   }
 
