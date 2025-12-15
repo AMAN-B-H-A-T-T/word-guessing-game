@@ -79,7 +79,7 @@ class GameUtility {
       player.id
     );
 
-    return { ...res, player_id: player.id };
+    return player;
   }
 
   static async addPlayers(
@@ -158,7 +158,8 @@ class GameUtility {
       0
     );
 
-    return playerDetails;
+    const details = this.buildGameDetails(gameData, playerDetails);
+    return details;
   }
 
   static async updateGameState(
@@ -306,39 +307,54 @@ class GameUtility {
         "Invalid update operation. A game creator only update settings."
       );
     }
-
     await gameServices.updateGame(gameId, data);
+    const gameSettings = {
+      rounds: data.rounds,
+      difficulty_level: data.difficulty,
+      max_players: data.maxPlayers,
+      min_word_lenght: data.minWordLength,
+      word_count: data.wordCount,
+      draw_time: data.drawTime,
+    };
+    const gameDatailsKey = `game:${gameCode}:${gameId}:gameDetails`;
+    await redisClient.hSet(gameDatailsKey, gameSettings);
+    const updatedDetails = await redisClient.hGetAll(gameDatailsKey);
     return;
   }
 
   static async getDrawableWordsOptions(settings: Record<string, any>) {
-    const query: Array<any> = [
-      {
-        $match: {
-          letter_count: {
-            $gte: settings.min_word_length,
-            ...(settings.max_word_length && { $lte: settings.max_word_length }),
+    try {
+      const query: Array<any> = [
+        {
+          $match: {
+            letter_count: {
+              $gte: settings.min_word_length,
+              ...(settings.max_word_length && {
+                $lte: settings.max_word_length,
+              }),
+            },
           },
         },
-      },
-      {
-        $sample: { size: settings.word_count },
-      },
-      {
-        $project: {
-          _id: 0,
-          word: 1,
+        {
+          $sample: { size: settings.word_count },
         },
-      },
-      {
-        $sort: {
-          word: -1,
+        {
+          $project: {
+            _id: 0,
+            word: 1,
+          },
         },
-      },
-    ];
-
-    const words = await drawableWords.aggregate(query);
-    return this.buildWordsList(words);
+        {
+          $sort: {
+            word: -1,
+          },
+        },
+      ];
+      const words = await drawableWords.aggregate(query);
+      return this.buildWordsList(words);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
   }
 
   static async updatePlayerStatus(status: number, playerId: string) {
@@ -403,9 +419,32 @@ class GameUtility {
       score: player.score,
       status: player.status,
       user_id: player.userId,
+      game_id: player.gameId,
       is_game_creator: player.isGameCreator,
       display_name: player.user.displayName,
       avatar_url: player.user.avatarUrl,
+    };
+  }
+
+  static buildGameDetails(gameData: any, playerData: any) {
+    return {
+      id: playerData.id,
+      game_id: gameData.id,
+      score: playerData.score,
+      player_status: playerData.status,
+      is_game_creator: playerData.is_game_creator,
+      display_name: playerData.display_name,
+      avatar_url: playerData.avatar_url,
+      status: gameData.status,
+      rounds: gameData.rounds,
+      difficulty_level: gameData.difficulty_level,
+      max_players: gameData.max_players,
+      min_word_lenght: gameData.min_word_lenght,
+      word_count: gameData.word_count,
+      game_code: gameData.game_code,
+      draw_time: gameData.draw_time,
+      created: gameData.created,
+      modified: gameData.modified,
     };
   }
 

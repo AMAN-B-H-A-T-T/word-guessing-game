@@ -401,7 +401,9 @@ class CommonUtilities {
     const difficultyMultiplier = difficultyLevel * 1.5;
     const attemptPenalty = (attempts - 1) * 10;
 
-    return (base + timeBonus) * difficultyMultiplier - attemptPenalty;
+    return Math.ceil(
+      (base + timeBonus) * difficultyMultiplier - attemptPenalty
+    );
   }
 }
 

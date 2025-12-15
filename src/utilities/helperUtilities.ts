@@ -43,6 +43,7 @@ class HelperUtilities {
 
     const players = gameData.players.map((player: any) => {
       return [
+        player.id,
         player.display_name,
         player.avatar_url,
         player.score,
@@ -62,14 +63,14 @@ class HelperUtilities {
     return data;
   }
   // [round,difficulty,maxPlayers,minWordLength,wordCount,drawTime]
-  static async prepareSesttingData(data: Array<any>) {
+  static prepareSesttingData(data: Array<any>) {
     const settingsPayload: Prisma.GamesUpdateInput = {
-      rounds: data[0],
+      rounds: Number(data[0]),
       difficulty: data[1],
-      maxPlayers: data[2],
-      minWordLength: data[3],
-      wordCount: data[4],
-      drawTime: data[5],
+      maxPlayers: Number(data[2]),
+      minWordLength: Number(data[3]),
+      wordCount: Number(data[4]),
+      drawTime: Number(data[5]),
     };
 
     return settingsPayload;
@@ -90,7 +91,6 @@ class HelperUtilities {
     const key = `game:${gameCode}:${gameId}:selectedWord`;
     const selectedWord = await redisClient.get(key);
     const roundKey = `game:${gameCode}:${gameId}:round`;
-
     if (trimmedWord !== selectedWord) {
       const penalty = CommonUtilities.calculateScore(
         false,
@@ -102,6 +102,7 @@ class HelperUtilities {
       await redisClient.hIncrBy(roundKey, playerId, penalty);
       return 0;
     }
+
     const score = CommonUtilities.calculateScore(
       true,
       100,
@@ -112,17 +113,18 @@ class HelperUtilities {
 
     // increase player score who drawing object
     const playreTurn = await redisClient.hGet(roundKey, "turn");
+
     const drawingScore = CommonUtilities.calculateScore(
       true,
       47,
-      time,
+      Number(time),
       difficulty,
       attempts
     );
+
     await redisClient.hIncrBy(roundKey, playreTurn, drawingScore);
     // increment  player score
     await redisClient.hIncrBy(roundKey, playerId, score);
-
     return score;
   }
 
@@ -134,7 +136,7 @@ class HelperUtilities {
     const memberKey = `room:${gameCode}:${gameId}:members`;
     const turnsKey = `game:${gameCode}:${gameId}:turns`;
     const playerDetailsKey = `game:${gameCode}:${playerId}:playerDetails`;
-
+    const playersKeys = `game:${gameCode}:${gameId}:players`;
     //find all playres online in room
     const members = (await redisClient.sMembers(memberKey)) as string[];
     if (!members.length) {
@@ -146,17 +148,16 @@ class HelperUtilities {
       throw new BadRequestException("Playres details are not found.");
     }
 
-    if (members.length - 1 === 1) {
-      // mark the game as the ongoing to ended
-      await GameUtility.updateGameState(GameStatus.ENDED, gameId, gameCode);
-      const pattern = `*:${gameCode}:${gameId}:*`;
-      await deleteGameTemporaryData(pattern);
-
-      return -1;
-    }
+    const isPlayerRoomCreator = await redisClient.hGet(
+      playerDetailsKey,
+      "is_game_creator"
+    );
 
     // remove player from members set
     await redisClient.sRem(memberKey, playerId);
+
+    // remove player from player set
+    await redisClient.sRem(playersKeys, playerId);
 
     // remove playre from turns list
     await redisClient.lRem(turnsKey, 1, playerId);
@@ -164,10 +165,20 @@ class HelperUtilities {
     // update player status
     await redisClient.del(playerDetailsKey);
 
+    if (Boolean(Number(isPlayerRoomCreator))) {
+      await GameUtility.updateGameState(GameStatus.ENDED, gameId, gameCode);
+      const pattern = `*:${gameCode}:${gameId}:*`;
+      await deleteGameTemporaryData(pattern);
+      return -1;
+    }
+
     //update player status in DB
     await GameUtility.updatePlayerStatus(playerStausType.offline, playerId);
 
-    return 1;
+    const gameData = await GameUtility.getGameDetails(gameCode, gameId);
+    const response = HelperUtilities.buildGameData(gameData);
+
+    return response;
   }
 
   static async protectedEvents(
@@ -175,12 +186,16 @@ class HelperUtilities {
     gameId: string,
     playerId: string
   ) {
-    const roundKey = `game:${gameCode}:${gameId}:round`;
-    const turnPlayer = (await redisClient.hGet(roundKey, "turn")) as string;
-    if (turnPlayer !== playerId) {
-      throw new BadRequestException(
-        "This event can only be sent by the player whose turn is currently active."
-      );
+    try {
+      const roundKey = `game:${gameCode}:${gameId}:round`;
+      const turnPlayer = (await redisClient.hGet(roundKey, "turn")) as string;
+      if (turnPlayer !== playerId) {
+        throw new BadRequestException(
+          "This event can only be sent by the player whose turn is currently active."
+        );
+      }
+    } catch (error) {
+      throw new BadRequestException(error.message);
     }
   }
 }

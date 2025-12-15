@@ -61,7 +61,7 @@ class SocketUtilities {
        * @event : "start_date"
        * @param : roomId
        * @description : room creator can triiger this event to change game state from INIT -> ONGOING
-       * @returns : data broadcasted : event : 'round'
+       * @returns : data broadcasted : event : 'round_data'
        */
       socket.on("start_game", async (roomId) => {
         const { gameCode, gameId } = this.getGameCodeAndId(roomId);
@@ -109,7 +109,7 @@ class SocketUtilities {
           const roomId = data[0];
           const playerId = data[1];
           const { gameCode, gameId } = this.getGameCodeAndId(roomId);
-          const settings = data.splice(2);
+          const settings = data[2];
           const settingsData = HelperUtilities.prepareSesttingData(settings);
 
           await GameUtility.updateGameSettings(
@@ -134,37 +134,44 @@ class SocketUtilities {
        * @event : "word_options"
        * @param : [roomId,playerId,difficulty,minWordLength,wordCount]
        * @description : "player demand for the words options for drawing"
-       * @return : data emited : event : "words"
+       * @return : data emited : event : "word_options"
        * @meta : difficulty_level => 1 -> 2 -> 3
        */
       socket.on("word_options", async (data) => {
-        const roomId = data[0];
-        const playerId = data[1];
-        const { gameCode, gameId } = this.getGameCodeAndId(roomId);
-        const difficultyLevel = DIFFICULTY_LEVEL_MAPPING[data[2]];
-        const min_word_length = data[3];
-        const nextDifficultyLevel = (data[2] + 1) % 3;
-        const max_word_length =
-          nextDifficultyLevel === 1
-            ? 0
-            : DIFFICULTY_LEVEL_MAPPING[nextDifficultyLevel];
+        try {
+          const roomId = data[0];
+          const playerId = data[1];
+          const { gameCode, gameId } = this.getGameCodeAndId(roomId);
+          const difficultyLevel = DIFFICULTY_LEVEL_MAPPING[data[2]];
+          const min_word_length = Number(data[3]);
+          const word_count = Number(data[4]);
+          const nextUpDifficulty =
+            DIFFICULTY_LEVEL_MAPPING[difficultyLevel + 1];
+          const maxWordLenght =
+            nextUpDifficulty !== undefined
+              ? nextUpDifficulty.min_word_lenght
+              : 10;
+          const setting = {
+            min_word_length: Math.min(
+              difficultyLevel.min_word_lenght,
+              min_word_length
+            ),
+            word_count,
+            max_word_length: maxWordLenght,
+          };
+          await HelperUtilities.protectedEvents(gameCode, gameId, playerId);
+          const words = await GameUtility.getDrawableWordsOptions(setting);
+          const key = `game:${gameCode}:${gameId}:wordOptions`;
+          await redisClient.del(key);
+          await redisClient.rPush(key, words);
 
-        const word_count = data[4];
-
-        const setting = {
-          min_word_length: Math.min(
-            difficultyLevel.min_word_lenght,
-            min_word_length
-          ),
-          word_count,
-          max_word_length,
-        };
-        await HelperUtilities.protectedEvents(gameCode, gameId, playerId);
-        const words = await GameUtility.getDrawableWordsOptions(setting);
-        const key = `game:${gameCode}:${gameId}:wordOptions`;
-        await redisClient.rPush(key, words);
-
-        this.emitMessage(socket, "word_options", words);
+          this.emitMessage(socket, "word_options", words);
+        } catch (error) {
+          this.sendErrorMessage(socket, {
+            status: 500,
+            message: error.message,
+          });
+        }
       });
 
       /**
@@ -206,30 +213,63 @@ class SocketUtilities {
        * @return : data braodcasted : evnet : "chat" , "turn_ended" , "game_ended"
        */
       socket.on("chat", async (message) => {
-        let guess = 404;
-        const [roomId, playerId, isAnswer, data] = message;
-        const chat = data[0];
-        const { gameCode, gameId } = this.getGameCodeAndId(roomId);
-        if (!isAnswer) {
+        try {
+          let guess = 404;
+          const [roomId, playerId, isAnswer, data] = message;
+          const chat = data[0];
+          const { gameCode, gameId } = this.getGameCodeAndId(roomId);
+          const selectedWordKey = `game:${gameCode}:${gameId}:selectedWord`;
+          if (!isAnswer) {
+            return this.boradcastMessage("chat", roomId, [
+              playerId,
+              chat,
+              guess,
+            ]);
+          }
+          const isOk = await HelperUtilities.processguess(
+            gameCode,
+            gameId,
+            playerId,
+            data
+          );
+          if (isOk) {
+            const word = await redisClient.get(selectedWordKey);
+            return this.boradcastMessage("correct_guessed", roomId, [
+              playerId,
+              word,
+            ]);
+          }
+
           return this.boradcastMessage("chat", roomId, [playerId, chat, guess]);
+        } catch (error) {
+          logger.error(`Error at chat with message : ${error.message}`);
+          this.sendErrorMessage(socket, {
+            status: 500,
+            message: error.message,
+          });
         }
-        const isOk = await HelperUtilities.processguess(
-          gameCode,
-          gameId,
-          playerId,
-          data
-        );
-        if (isOk) {
+      });
+
+      socket.on("round_data", async (message) => {
+        const [roomId, playerId] = message;
+        try {
+          const { gameCode, gameId } = this.getGameCodeAndId(roomId);
           const data = await GameUtility.handelTurns(gameCode, gameId);
 
           if (typeof data === "string") {
             return this.boradcastMessage("game_ended", roomId, ["OK"]);
           }
 
-          return this.boradcastMessage("turn_ended", roomId, data);
+          return this.boradcastMessage("round_data", roomId, data);
+        } catch (error) {
+          logger.error(
+            `Error at round_data game-${roomId}-${playerId} with message : ${error.message}`
+          );
+          this.sendErrorMessage(socket, {
+            status: 500,
+            message: error.message,
+          });
         }
-
-        return this.boradcastMessage("chat", roomId, [playerId, chat, guess]);
       });
 
       /**
@@ -240,17 +280,23 @@ class SocketUtilities {
        */
       socket.on("drawing_time_ended", async (data) => {
         const [roomId, playerId] = data;
-        const { gameCode, gameId } = this.getGameCodeAndId(roomId);
+        try {
+          const { gameCode, gameId } = this.getGameCodeAndId(roomId);
+          const key = `game:${gameCode}:${gameId}:selectedWord`;
+          const selectedWord = await redisClient.get(key);
+          // protected event
+          await HelperUtilities.protectedEvents(gameCode, gameId, playerId);
 
-        // protected event
-        await HelperUtilities.protectedEvents(gameCode, gameId, playerId);
-
-        //
-        const turnData = await GameUtility.handelTurns(gameCode, gameId);
-        if (typeof turnData === "string") {
-          return this.boradcastMessage("game_ended", roomId, ["OK"]);
+          return this.boradcastMessage("turn_ended", roomId, [selectedWord]);
+        } catch (error) {
+          logger.error(
+            `Error at drawing_time_ended game: ${roomId}-${playerId} with message : ${error.message}`
+          );
+          this.sendErrorMessage(socket, {
+            status: 500,
+            message: error.message,
+          });
         }
-        return this.boradcastMessage("turn_ended", roomId, turnData);
       });
 
       /**
@@ -266,18 +312,32 @@ class SocketUtilities {
 
       socket.on("disconnect", async () => {
         const id = this.socketIdtoRoomIdMap[socket.id];
-        if (id) {
-          const [gameCode, gameId, playerId] = id?.split(":");
+        try {
+          if (id) {
+            const [gameCode, gameId, playerId] = id?.split(":");
 
-          await HelperUtilities.handlePlayerDisconnection(
-            gameCode,
-            gameId,
-            playerId
+            const response = await HelperUtilities.handlePlayerDisconnection(
+              gameCode,
+              gameId,
+              playerId
+            );
+            if (typeof response === "object") {
+              this.boradcastMessage(
+                "game_data",
+                `${gameCode}:${gameId}`,
+                response
+              );
+            }
+            delete this.socketIdtoRoomIdMap[socket.id];
+          }
+        } catch (error) {
+          logger.error(
+            `Error at disconnect socket: ${id} with message : ${error.message}`
           );
-          delete this.socketIdtoRoomIdMap[socket.id];
-        } else {
-          const keys = await redisClient.keys("room:*:members");
-          await redisClient.del(keys);
+          this.sendErrorMessage(socket, {
+            status: 500,
+            message: error.message,
+          });
         }
       });
 
