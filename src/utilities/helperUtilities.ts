@@ -4,7 +4,6 @@ import BadRequestException from "../exceptions/badRequestException";
 import CommonUtilities from "./commonUtilities";
 import GameUtility from "../module/game/game.utilities";
 import { deleteGameTemporaryData } from "./redisCleanup";
-import { playerStausType } from "../module/index.types";
 
 class HelperUtilities {
   static async checkPlayerAlreadyInRoom(roomId: string, playerId: string) {
@@ -137,6 +136,7 @@ class HelperUtilities {
     const turnsKey = `game:${gameCode}:${gameId}:turns`;
     const playerDetailsKey = `game:${gameCode}:${playerId}:playerDetails`;
     const playersKeys = `game:${gameCode}:${gameId}:players`;
+    const roundKey = `game:${gameCode}:${gameId}:round`;
     //find all playres online in room
     const members = (await redisClient.sMembers(memberKey)) as string[];
     if (!members.length) {
@@ -165,6 +165,10 @@ class HelperUtilities {
     // update player status
     await redisClient.del(playerDetailsKey);
 
+    //update player status and score in DB
+    const score = (await redisClient.hGet(roundKey, playerId)) as string;
+    await GameUtility.updatePlayerSocre({ [playerId]: score });
+
     if (Boolean(Number(isPlayerRoomCreator))) {
       await GameUtility.updateGameState(GameStatus.ENDED, gameId, gameCode);
       const pattern = `*:${gameCode}:${gameId}:*`;
@@ -172,8 +176,7 @@ class HelperUtilities {
       return -1;
     }
 
-    //update player status in DB
-    await GameUtility.updatePlayerStatus(playerStausType.offline, playerId);
+    // await GameUtility.updatePlayerStatus(playerStausType.offline, playerId);
 
     const gameData = await GameUtility.getGameDetails(gameCode, gameId);
     const response = HelperUtilities.buildGameData(gameData);

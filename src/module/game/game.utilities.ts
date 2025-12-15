@@ -10,6 +10,7 @@ import HelperUtilities from "../../utilities/helperUtilities";
 import drawableWords from "../../database/models/drawableWords";
 import NotFoundRequestException from "../../exceptions/notFoundException";
 import { deleteGameTemporaryData } from "../../utilities/redisCleanup";
+import { playerStausType } from "../index.types";
 
 class GameUtility {
   static async createGame(
@@ -269,6 +270,14 @@ class GameUtility {
     if (currentPlayerTurn === roomCreator) {
       const updatedRound = await redisClient.hIncrBy(roundKey, "round", 1);
       if (updatedRound > totalRounds) {
+        const roundDetails = (await redisClient.hGetAll(roundKey)) as Record<
+          string,
+          any
+        >;
+
+        delete roundDetails["turn"];
+        delete roundDetails["round"];
+        await GameUtility.updatePlayerSocre(roundDetails);
         return "GAME_ENDED";
       }
     }
@@ -395,6 +404,21 @@ class GameUtility {
     await deleteGameTemporaryData(pattern);
 
     return true;
+  }
+
+  static async updatePlayerSocre(data: Record<string, string>) {
+    const updateQueries = Object.entries(data).map(
+      async ([playerId, score]) => {
+        const payload: Prisma.PlayersUpdateInput = {
+          status: playerStausType.offline,
+          score: Number(score),
+        };
+        await gameServices.updatePlayer(playerId, payload);
+      }
+    );
+
+    await Promise.all(updateQueries);
+    return;
   }
 
   static buildGameResponse(game: Games) {
